@@ -40,6 +40,18 @@ object ByteArrayExt {
 		this[index + 1] = (0xff and (value shr 0)).toByte()
 	}
 	fun ByteArray.setShortAt(index: Int, value: Short) = setShortAt(index, value.toInt())
+
+	fun String.decodeHex(): ByteArray {
+		check(length % 2 == 0) { "Must have an even length" }
+		return chunked(2)
+			.map { it.toInt(16).toByte() }
+			.toByteArray()
+	}
+	// https://stackoverflow.com/a/61662459/169035
+	fun ByteArray.toHexString(separator: CharSequence = " ",  prefix: CharSequence = "[",  postfix: CharSequence = "]") =
+		this.joinToString(separator, prefix, postfix) {
+			String.format("0x%02X", it)
+		}
 }
 
 class ShortField(val data: ByteArray, val index: Int) {

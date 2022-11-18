@@ -1,7 +1,10 @@
 package io.bimmergestalt.bcl
 
+import android.bluetooth.BluetoothAdapter
+import android.os.Build
 import com.google.common.io.CountingInputStream
 import com.google.common.io.CountingOutputStream
+import io.bimmergestalt.bcl.ByteArrayExt.decodeHex
 import org.tinylog.kotlin.Logger
 import java.io.IOException
 import java.io.InputStream
@@ -36,16 +39,23 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	val bytesWritten: Long
 		get() = output.count
 
+	var running = true
 	var state: STATE = STATE.UNKNOWN
 		private set
+	val isConnected: Boolean
+		get() = connectionHandshake != null
 	private var connectionHandshake: BclPacket.Specialized.Handshake? = null
 	var startupTimestamp = 0L
+
+	val sockets = HashMap<Short, OutputStream>()
+	var nextSocketIndex: Short = 10
 
 	@Throws(IOException::class)
 	fun connect() {
 		state = STATE.SESSION_INIT_BYTES_SEND
 		waitForHandshake()
 		selectProtocol()
+		openWatchdog()
 	}
 
 	private fun waitForHandshake() {
@@ -89,20 +99,58 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	private fun doKnock() {
 		// i think empty values work fine here
-		BclPacket.Specialized.Knock(ByteArray(0), ByteArray(0),
+		val serial = Build.SERIAL.encodeToByteArray()
+		val adapter = BluetoothAdapter.getDefaultAdapter()
+		val btAddr = adapter.address?.uppercase()?.encodeToByteArray() ?: ByteArray(0)
+		BclPacket.Specialized.Knock(serial, btAddr,
 			ByteArray(0), ByteArray(0),
-			0 /*A4A*/, 1).writeTo(output)
+			1 /*A4A*/, 7).writeTo(output)
+		// 0 and 1
+		// otherwise 1 and 7
+	}
+
+	private fun openWatchdog() {
+		BclPacket.Specialized.Open(5001, 5001).writeTo(output)
 	}
 
 	fun doWatchdog() {
 		val data = byteArrayOf(0x13, 0x37, 0x13, 0x37)
-		BclPacket(BclPacket.COMMAND.DATA, 5001, 5001, data).writeTo(output)
+		BclPacket.Specialized.Data(5001, 5001, data).writeTo(output)
+	}
+
+	fun openSocket(destPort: Short, stream: OutputStream): OutputStream {
+		val src = synchronized(sockets) {
+			val src = nextSocketIndex
+			nextSocketIndex = nextSocketIndex.inc()
+			sockets[src] = stream
+			src
+		}
+		BclPacket.Specialized.Open(src, destPort).writeTo(output)
+		return BclOutputStream(src, destPort, output)
 	}
 
 	fun run() {
-		while (true) {
+		while (running) {
 			val packet = BclPacket.readFrom(input)
-			Logger.info { "Received packet $packet" }
+			if (packet.command == BclPacket.COMMAND.DATA && packet.dest == 5001.toShort()) {
+				BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
+				doWatchdog()
+			}
+			else if (packet.command == BclPacket.COMMAND.DATA) {
+				BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
+				synchronized(sockets) {
+					val socket = sockets[packet.src]
+					if (socket == null) {
+						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
+					}
+					try {
+						socket?.write(packet.data)
+					} catch (e: IOException) {
+						sockets.remove(packet.src)
+						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
+					}
+				}
+			}
 		}
 	}
 
@@ -112,6 +160,8 @@ class BclConnection(input: InputStream, output: OutputStream) {
 		} catch (_: IOException) {}
 	}
 	fun shutdown() {
-		BclPacket(BclPacket.COMMAND.HANGUP, 0, 0, ByteArray(0))
+		running = false
+		BclPacket.Specialized.Close(5001, 5001).writeTo(output)
+		BclPacket(BclPacket.COMMAND.HANGUP, 0, 0, ByteArray(0)).writeTo(output)
 	}
 }

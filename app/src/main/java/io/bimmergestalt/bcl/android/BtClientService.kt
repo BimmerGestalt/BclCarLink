@@ -17,6 +17,9 @@ import android.util.ArrayMap
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import io.bimmergestalt.bcl.BclConnection
+import io.bimmergestalt.bcl.BclProxyManager
+import io.bimmergestalt.bcl.BclProxyServer
 import org.tinylog.kotlin.Logger
 import java.util.*
 
@@ -50,6 +53,8 @@ class BtClientService: Service() {
 	companion object {
 		private val _statusText = MutableLiveData("")
 		val statusText: LiveData<String> = _statusText
+		private const val ETCH_PROXY_PORT = 4007
+		private const val ETCH_DEST_PORT = 4004
 	}
 
 	// on startup, check for Bluetooth Connect privilege, stop self if not
@@ -59,6 +64,7 @@ class BtClientService: Service() {
 	// socket connection is blocking for up to 12s timeout
 	// each socket needs its own Thread
 
+	private val handler = Handler(Looper.getMainLooper())
 	private var subscribed = false
 	private val a2dpListener = ProfileListener(BluetoothProfile.A2DP) { tryConnections() }
 	private val btThreads = ArrayMap<String, BtConnection>()      // bt address to thread
@@ -69,7 +75,7 @@ class BtClientService: Service() {
 			tryConnections()
 		}
 	}
-	private val handler = Handler(Looper.getMainLooper())
+	private var bclProxy = BclProxyManager(ETCH_PROXY_PORT, ETCH_DEST_PORT)
 
 	override fun onBind(intent: Intent?): IBinder? {
 		return null
@@ -122,16 +128,40 @@ class BtClientService: Service() {
 
 	private fun tryConnections() {
 		synchronized(btThreads) {
-			a2dpListener.profile?.safeConnectedDevices?.filter { it.hasBCL() }?.forEach {
+			val connectedDevices = a2dpListener.profile?.safeConnectedDevices ?: emptyList()
+			connectedDevices.filter { it.hasBCL() }?.forEach {
 				if (btThreads[it.address]?.isAlive != true) {
 					Logger.info { "Starting to connect to ${it.safeName}" }
-					btThreads[it.address] = BtConnection(it).apply {
+					val btConnection = BtConnection(it) {
+						applyProxy()
+					}
+					btThreads[it.address] = btConnection.apply {
 						start()
 					}
 				} else {
 					Logger.info { "Still connected to ${it.safeName}" }
 				}
 			}
+			(btThreads.keys - connectedDevices.map { it.address }.toSet()).forEach { address ->
+				Logger.info { "Shutting down thread from disconnected $address" }
+				btThreads[address]?.shutdown()
+				btThreads.remove(address)
+			}
+			applyProxy()
+		}
+	}
+
+	private fun applyProxy() {
+		val btConnection = synchronized(btThreads) {
+			btThreads.values.firstOrNull { it.isAlive && it.isConnected }
+		}
+		val bclConnection = btConnection?.bclConnection
+		if (bclConnection != null) {
+			Logger.info { "Starting BCL Proxy"}
+			bclProxy.startProxy(bclConnection)
+		} else {
+			Logger.info { "Stopping BCL Proxy"}
+			bclProxy.shutdown()
 		}
 	}
 
@@ -149,6 +179,7 @@ class BtClientService: Service() {
 		btThreads.values.forEach {
 			it?.shutdown()
 		}
+		bclProxy.shutdown()
 	}
 
 	override fun onDestroy() {

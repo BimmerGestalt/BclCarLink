@@ -1,5 +1,6 @@
 package io.bimmergestalt.bcl
 
+import io.bimmergestalt.bcl.ByteArrayExt.toHexString
 import org.tinylog.kotlin.Logger
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -9,6 +10,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import java.nio.charset.Charset
 
 
 open class BclPacket(
@@ -89,15 +91,20 @@ open class BclPacket(
 			val param1: Short
 			init {
 				val buffer = ByteBuffer.wrap(data)
-				serial = ByteArray(buffer.getShort(buffer.position()).toInt())
-				btAddr = ByteArray(buffer.getShort(buffer.position()).toInt())
-				macAddr = ByteArray(buffer.getShort(buffer.position()).toInt())
-				wifiAddr = ByteArray(buffer.getShort(buffer.position()).toInt())
-				appType = buffer.getShort(buffer.position())
-				param1 = buffer.getShort(buffer.position())
+				serial = ByteArray(buffer.short.toInt())
+				buffer.get(serial)
+				btAddr = ByteArray(buffer.short.toInt())
+				buffer.get(btAddr)
+				macAddr = ByteArray(buffer.short.toInt())
+				buffer.get(macAddr)
+				wifiAddr = ByteArray(buffer.short.toInt())
+				buffer.get(wifiAddr)
+				appType = buffer.short
+				param1 = buffer.short
 			}
 			override fun toString(): String {
-				return "BclPacket\$Knock(appType=$appType)"
+				return "BclPacket\$Knock(appType=$appType, serial=${serial.toString(Charset.defaultCharset())}, btAddr=${btAddr.toString(
+					Charset.defaultCharset())}, data=${data.toHexString()})"
 			}
 		}
 		fun Knock(serial: ByteArray, btAddr: ByteArray,
@@ -114,15 +121,46 @@ open class BclPacket(
 			buffer.put(wifiAddr)
 			buffer.putShort(appType)
 			buffer.putShort(param1)
-			return Knock(buffer.array())
+			val output = ByteArray(buffer.position())
+			buffer.flip()
+			buffer.get(output)
+			return Knock(output)
+		}
+		class Open(src: Short, dest: Short): BclPacket(COMMAND.OPEN, src, dest, ByteArray(0)) {
+			override fun toString(): String {
+				return "BclPacket\$Open(src=$src, dest=$dest)"
+			}
+		}
+		class Close(src: Short, dest: Short): BclPacket(COMMAND.CLOSE, src, dest, ByteArray(0)) {
+			override fun toString(): String {
+				return "BclPacket\$Close(src=$src, dest=$dest)"
+			}
+		}
+		class Data(src: Short, dest: Short, data: ByteArray): BclPacket(COMMAND.DATA, src, dest, data) {
+			override fun toString(): String {
+				return if (data.size < 32) {
+					"BclPacket\$Data(src=$src, dest=$dest, data=${data.contentToString()})"
+				} else {
+					"BclPacket\$Data(src=$src, dest=$dest, dataLen=${data.size})"
+				}
+			}
+		}
+		class DataAck(data: ByteArray = ByteArray(4)): BclPacket(COMMAND.DATAACK, 0, 0, data) {
+			var count by IntField(data, 0)
+			override fun toString(): String {
+				return "BclPacket\$DataAck(count=$count)"
+			}
+		}
+		fun DataAck(count: Int): DataAck {
+			return DataAck().apply { this.count = count }
 		}
 	}
 
 	override fun equals(other: Any?): Boolean {
 		if (this === other) return true
-		if (javaClass != other?.javaClass) return false
+		if (other !is BclPacket) return false
 
-		other as BclPacket
+		other
 
 		if (command != other.command) return false
 		if (src != other.src) return false
@@ -151,12 +189,13 @@ open class BclPacket(
 	fun writeTo(stream: OutputStream) {
 		Logger.debug { "Writing $this"}
 		// write to the stream, needs to be big endian
-		val writer = DataOutputStream(stream)
-		writer.writeShort(command.value.toInt())
-		writer.writeShort(src.toInt())
-		writer.writeShort(dest.toInt())
-		writer.writeShort(data.size)
-		writer.write(data)
+		val buffer = ByteBuffer.allocate(8 + data.size)
+		buffer.putShort(command.value)
+		buffer.putShort(src)
+		buffer.putShort(dest)
+		buffer.putShort(data.size.toShort())
+		buffer.put(data)
+		stream.write(buffer.array())
 	}
 
 	fun asSpecialized(): BclPacket {
@@ -164,16 +203,24 @@ open class BclPacket(
 			Specialized.Handshake(data)
 		} else if (command == COMMAND.KNOCK && data.size > 12) {
 			Specialized.Knock(data)
+		} else if (command == COMMAND.OPEN) {
+			Specialized.Open(src, dest)
+		} else if (command == COMMAND.CLOSE) {
+			Specialized.Close(src, dest)
+		} else if (command == COMMAND.DATA) {
+			Specialized.Data(src, dest, data)
+		} else if (command == COMMAND.DATAACK) {
+			Specialized.DataAck(data)
 		} else {
 			this
 		}
 	}
 
 	override fun toString(): String {
-		if (data.size < 32) {
-			return "BclPacket($command, src=$src, dest=$dest, data=${data.contentToString()})"
+		return if (data.size < 32) {
+			"BclPacket($command, src=$src, dest=$dest, data=${data.contentToString()})"
 		} else {
-			return "BclPacket($command, src=$src, dest=$dest, dataLen=${data.size})"
+			"BclPacket($command, src=$src, dest=$dest, dataLen=${data.size})"
 		}
 	}
 }

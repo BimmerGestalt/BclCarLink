@@ -12,15 +12,18 @@ import java.util.*
  *
  * Will shut down upon failure
  */
-class BtConnection(val device: BluetoothDevice): Thread() {
+class BtConnection(val device: BluetoothDevice, val onConnect: (BclConnection) -> Unit): Thread() {
 
 	companion object {
 		val SDP_BCL: UUID =
 			UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")      // Generic Serial Port
 	}
 
-	var socket: BluetoothSocket? = null
+	private var socket: BluetoothSocket? = null
 	var bclConnection: BclConnection? = null
+		private set
+	val isConnected: Boolean
+		get() = bclConnection?.isConnected == true
 
 	override fun run() {
 		val socket = try {
@@ -44,6 +47,7 @@ class BtConnection(val device: BluetoothDevice): Thread() {
 				this.bclConnection = bclConnection
 				bclConnection.connect()
 				bclConnection.doWatchdog()
+				onConnect(bclConnection)
 				bclConnection.run()
 			}
 		} catch (_: SecurityException) {
@@ -53,14 +57,17 @@ class BtConnection(val device: BluetoothDevice): Thread() {
 	}
 
 	fun connectSocket() {
-		while (socket?.isConnected == false) {
+		var count = 0
+		val maxTries = 10
+		while (socket?.isConnected == false && count < maxTries) {
 			try {
 				socket?.connect()
 			} catch (e: SecurityException) {
 				throw e
 			} catch (e: IOException) {
-				Logger.warn(e) { "IOException opening BluetoothSocket, trying again" }
-				sleep(1000)
+				Logger.warn(e) { "IOException opening BluetoothSocket, trying again ($count<$maxTries tries)" }
+				sleep(2000)
+				count += 1
 			}
 		}
 	}

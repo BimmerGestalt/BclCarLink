@@ -23,6 +23,8 @@ class BclConnection(input: InputStream, output: OutputStream) {
 			SESSION_INIT_BYTES_SEND,
 			HANDSHAKE_FAILED,
 			GOT_HANDSHAKE,
+			SELECT_PROTOCOL,
+			WORKING,
 		}
 
 		private const val SESSION_INIT_WAIT = 1000L
@@ -46,6 +48,8 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	private var connectionHandshake: BclPacket.Specialized.Handshake? = null
 	var startupTimestamp = 0L
 	var lastWatchdog = 0L
+	val instanceId: Int
+		get() = connectionHandshake?.instanceId?.toInt() ?: -1
 
 	val clients = HashMap<Short, SocketChannel>()
 	var nextSocketIndex: Short = 10
@@ -56,6 +60,7 @@ class BclConnection(input: InputStream, output: OutputStream) {
 		waitForHandshake()
 		selectProtocol()
 		openWatchdog()
+		state = STATE.WORKING
 	}
 
 	private fun waitForHandshake() {
@@ -87,6 +92,7 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	private fun selectProtocol() {
 		val connectionHandshake = connectionHandshake ?: throw AssertionError("No Handshake Receiver")
+		state = STATE.SELECT_PROTOCOL
 		val version = connectionHandshake.version.toByte()
 		if (version > 3) {
 			BclPacket.Specialized.SelectProto(version.toShort()).writeTo(output)
@@ -150,6 +156,17 @@ class BclConnection(input: InputStream, output: OutputStream) {
 			}
 		}
 	}
+
+	fun getReport() = BclConnectionReport(
+		startupTimestamp,
+		bytesRead, bytesWritten,
+		clients.size,
+		instanceId.toShort(),
+		0,
+		connectionHandshake?.bufferSize ?: -1,
+		0,
+		state.toString()
+	)
 
 	fun tryShutdown() {
 		try {

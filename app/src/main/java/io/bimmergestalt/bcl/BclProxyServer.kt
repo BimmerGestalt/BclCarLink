@@ -17,10 +17,13 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
     val sockets = HashMap<SocketChannel, OutputStream>()
 
     fun listen() {
-        val inputBuffer = ByteBuffer.allocate(4000)
         serverSocket.configureBlocking(false)
         serverSocket.register(selector, SelectionKey.OP_ACCEPT)
         serverSocket.bind(InetSocketAddress(listenPort))
+    }
+
+    fun run() {
+        val inputBuffer = ByteBuffer.allocate(4000)
         while (serverSocket.isOpen) {
             selector.select(2500)
             val readyKeys = selector.selectedKeys()

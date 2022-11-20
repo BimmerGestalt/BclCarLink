@@ -31,11 +31,12 @@ class MainActivity : AppCompatActivity() {
 		setupActionBarWithNavController(navController, appBarConfiguration)
 
 		binding.fabConnect.setOnClickListener { view ->
-			startService(Intent(this, BtClientService::class.java))
+			BtClientService.startService(this)
 		}
 		binding.fabDisconnect.setOnClickListener { view ->
-			startService(Intent(this, BtClientService::class.java).setAction("disconnect"))
+			BtClientService.stopService(this)
 		}
+
 	}
 
 	override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -58,5 +59,12 @@ class MainActivity : AppCompatActivity() {
 		val navController = findNavController(R.id.nav_host_fragment_content_main)
 		return navController.navigateUp(appBarConfiguration)
 				|| super.onSupportNavigateUp()
+	}
+
+	override fun onResume() {
+		super.onResume()
+		if (BtClientService.shouldStartAutomatically(applicationContext)) {
+			BtClientService.startService(this)
+		}
 	}
 }

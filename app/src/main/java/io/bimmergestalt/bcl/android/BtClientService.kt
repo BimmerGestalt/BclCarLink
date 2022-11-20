@@ -14,6 +14,7 @@ import android.util.ArrayMap
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.preference.PreferenceManager
 import io.bimmergestalt.bcl.BclConnection
 import io.bimmergestalt.bcl.BclProxyManager
 import org.tinylog.kotlin.Logger
@@ -53,6 +54,23 @@ class BtClientService: Service() {
 		val statusText: LiveData<String> = _statusText
 		private const val ETCH_PROXY_PORT = 4007
 		private const val ETCH_DEST_PORT = 4004
+
+		fun shouldStartAutomatically(context: Context): Boolean {
+			val preferences = PreferenceManager.getDefaultSharedPreferences(context)
+			return preferences.getBoolean("automatic_bt_connection", true)
+		}
+		fun startService(context: Context) {
+			try {
+				context.startService(Intent(context, BtClientService::class.java))
+			} catch (e: IllegalStateException) {
+				Logger.warn { "Unable to start BtClientService: $e"}
+			}
+		}
+		fun stopService(context: Context) {
+			try {
+				context.startService(Intent(context, BtClientService::class.java).setAction("disconnect"))
+			} catch (_: IllegalStateException) {}
+		}
 	}
 
 	// on startup, check for Bluetooth Connect privilege, stop self if not

@@ -17,7 +17,7 @@
     </fragment>
     <fragment
         android:id="@+id/SecondFragment"
-        android:name="io.bimmergestalt.bclclient.SecondFragment"
+        android:name="io.bimmergestalt.bclclient.PreferencesFragment"
         android:label="@string/second_fragment_label"
         tools:layout="@layout/fragment_second">
 

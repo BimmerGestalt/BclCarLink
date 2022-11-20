@@ -40,6 +40,20 @@
         </activity>
         <service android:name="io.bimmergestalt.bcl.android.BtClientService"
             android:exported="false" />
+
+        <receiver
+            android:name=".BtBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action
+                    android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />
+            </intent-filter>
+            <intent-filter>
+                <action
+                    android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

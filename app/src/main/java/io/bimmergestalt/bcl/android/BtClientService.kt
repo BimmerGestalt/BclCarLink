@@ -132,6 +132,7 @@ class BtClientService: Service() {
 			connectedDevices.filter { it.hasBCL() }?.forEach {
 				if (btThreads[it.address]?.isAlive != true) {
 					Logger.info { "Starting to connect to ${it.safeName}" }
+
 					val btConnection = BtConnection(it) {
 						applyProxy()
 					}
@@ -159,7 +160,7 @@ class BtClientService: Service() {
 		if (bclConnection != null) {
 			Logger.info { "Starting BCL Proxy"}
 			bclProxy.startProxy(bclConnection)
-		} else {
+		} else if (bclProxy.proxyServer != null) {
 			Logger.info { "Stopping BCL Proxy"}
 			bclProxy.shutdown()
 		}
@@ -168,7 +169,9 @@ class BtClientService: Service() {
 	private fun stopScan() {
 		if (subscribed) {
 			try {
-				this.getSystemService(BluetoothManager::class.java).adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpListener.profile)
+				val adapter = this.getSystemService(BluetoothManager::class.java).adapter
+				adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpListener.profile)
+				adapter.cancelDiscovery()
 			} catch (_: SecurityException) { }
 			unregisterReceiver(uuidListener)
 		}

@@ -6,7 +6,9 @@ import kotlin.concurrent.thread
 
 class BclProxyManager(val port: Int, val destPort: Int) {
     var proxyThread: Thread? = null
+        private set
     var proxyServer: BclProxyServer? = null
+        private set
 
     fun startProxy(bclConnection: BclConnection) {
         shutdown()

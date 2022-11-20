@@ -22,7 +22,7 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
         serverSocket.register(selector, SelectionKey.OP_ACCEPT)
         serverSocket.bind(InetSocketAddress(listenPort))
         while (serverSocket.isOpen) {
-            selector.select()
+            selector.select(2500)
             val readyKeys = selector.selectedKeys()
             readyKeys.forEach { key ->
                 try {
@@ -34,7 +34,7 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
                         socket.register(selector, SelectionKey.OP_READ)
                         val bclOutput = connection.openSocket(
                             destPort.toShort(),
-                            socket.socket().getOutputStream()
+                            socket
                         )
                         sockets[socket] = bclOutput
                     }
@@ -63,6 +63,7 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
                 } catch (_: CancelledKeyException) {}
             }
             readyKeys.clear()
+            connection.doWatchdog()
         }
         shutdown()
     }

@@ -1,15 +1,15 @@
 package io.bimmergestalt.bcl
 
-import android.bluetooth.BluetoothAdapter
-import android.os.Build
 import com.google.common.io.CountingInputStream
 import com.google.common.io.CountingOutputStream
 import io.bimmergestalt.bcl.ByteArrayExt.decodeHex
-import org.tinylog.kotlin.Logger
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.ConnectException
+import java.nio.ByteBuffer
+import java.nio.channels.Channel
+import java.nio.channels.SocketChannel
 
 /**
  * Runs the BCL protocol over the given socket streams
@@ -46,8 +46,9 @@ class BclConnection(input: InputStream, output: OutputStream) {
 		get() = connectionHandshake != null
 	private var connectionHandshake: BclPacket.Specialized.Handshake? = null
 	var startupTimestamp = 0L
+	var lastWatchdog = 0L
 
-	val sockets = HashMap<Short, OutputStream>()
+	val clients = HashMap<Short, SocketChannel>()
 	var nextSocketIndex: Short = 10
 
 	@Throws(IOException::class)
@@ -71,10 +72,7 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	}
 
 	private fun initSession() {
-		output.write(0x12)
-		output.write(0x34)
-		output.write(0x56)
-		output.write(0x78)
+		output.write("12345678".decodeHex())
 		Thread.sleep(SESSION_INIT_WAIT)
 	}
 
@@ -90,7 +88,8 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	private fun selectProtocol() {
 		val connectionHandshake = connectionHandshake ?: throw AssertionError("No Handshake Receiver")
-		val version = connectionHandshake.version.toByte()
+//		val version = connectionHandshake.version.toByte()
+		val version = 4
 		if (version > 3) {
 			BclPacket.Specialized.SelectProto(version.toShort()).writeTo(output)
 			doKnock()
@@ -99,10 +98,12 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	private fun doKnock() {
 		// i think empty values work fine here
-		val serial = Build.SERIAL.encodeToByteArray()
-		val adapter = BluetoothAdapter.getDefaultAdapter()
-		val btAddr = adapter.address?.uppercase()?.encodeToByteArray() ?: ByteArray(0)
-		BclPacket.Specialized.Knock(serial, btAddr,
+//		val serial = UUID.randomUUID().toString().encodeToByteArray()
+		val serial = "2125be03-4438-4243-9a84-91cdbe664f7b".encodeToByteArray()
+//		val serial = Build.SERIAL.encodeToByteArray()
+//		val adapter = BluetoothAdapter.getDefaultAdapter()
+//		val btAddr = adapter.address?.uppercase()?.encodeToByteArray() ?: ByteArray(0)
+		BclPacket.Specialized.Knock(serial, ByteArray(0),
 			ByteArray(0), ByteArray(0),
 			1 /*A4A*/, 7).writeTo(output)
 		// 0 and 1
@@ -114,15 +115,18 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	}
 
 	fun doWatchdog() {
-		val data = byteArrayOf(0x13, 0x37, 0x13, 0x37)
-		BclPacket.Specialized.Data(5001, 5001, data).writeTo(output)
+		if (lastWatchdog + 5000 < System.currentTimeMillis()) {
+			val data = byteArrayOf(0x13, 0x37, 0x13, 0x37)
+			BclPacket.Specialized.Data(5001, 5001, data).writeTo(output)
+			lastWatchdog = System.currentTimeMillis()
+		}
 	}
 
-	fun openSocket(destPort: Short, stream: OutputStream): OutputStream {
-		val src = synchronized(sockets) {
+	fun openSocket(destPort: Short, client: SocketChannel): OutputStream {
+		val src = synchronized(clients) {
 			val src = nextSocketIndex
 			nextSocketIndex = nextSocketIndex.inc()
-			sockets[src] = stream
+			clients[src] = client
 			src
 		}
 		BclPacket.Specialized.Open(src, destPort).writeTo(output)
@@ -138,15 +142,15 @@ class BclConnection(input: InputStream, output: OutputStream) {
 			}
 			else if (packet.command == BclPacket.COMMAND.DATA) {
 				BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
-				synchronized(sockets) {
-					val socket = sockets[packet.src]
-					if (socket == null) {
+				synchronized(clients) {
+					val channel = clients[packet.src]
+					if (channel == null) {
 						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
 					}
 					try {
-						socket?.write(packet.data)
+						channel?.write(ByteBuffer.wrap(packet.data))
 					} catch (e: IOException) {
-						sockets.remove(packet.src)
+						clients.remove(packet.src)
 						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
 					}
 				}
@@ -162,6 +166,9 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	fun shutdown() {
 		running = false
 		BclPacket.Specialized.Close(5001, 5001).writeTo(output)
+		clients.keys.forEach {
+			BclPacket.Specialized.Close(it, 4004).writeTo(output)
+		}
 		BclPacket(BclPacket.COMMAND.HANGUP, 0, 0, ByteArray(0)).writeTo(output)
 	}
 }

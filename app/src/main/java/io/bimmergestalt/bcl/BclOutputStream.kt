@@ -15,7 +15,10 @@ class BclOutputStream(private val src: Short, private val dest: Short, private v
 
     override fun write(b: ByteArray?, off: Int, len: Int) {
         b ?: return
-        if (off == 0 && len == b.size) write(b)
-        BclPacket.Specialized.Data(src, dest, b.sliceArray(off until len)).writeTo(outputStream)
+        if (off == 0 && len == b.size)  {
+            write(b)
+        } else {
+            BclPacket.Specialized.Data(src, dest, b.sliceArray(off until len)).writeTo(outputStream)
+        }
     }
 }

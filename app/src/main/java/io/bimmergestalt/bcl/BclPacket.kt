@@ -189,13 +189,13 @@ open class BclPacket(
 	fun writeTo(stream: OutputStream) {
 		Logger.debug { "Writing $this"}
 		// write to the stream, needs to be big endian
-		val writer = DataOutputStream(stream)
-		writer.writeShort(command.value.toInt())
-		writer.writeShort(src.toInt())
-		writer.writeShort(dest.toInt())
-		writer.writeShort(data.size)
-		writer.write(data)
-		Thread.sleep(200)
+		val buffer = ByteBuffer.allocate(8 + data.size)
+		buffer.putShort(command.value)
+		buffer.putShort(src)
+		buffer.putShort(dest)
+		buffer.putShort(data.size.toShort())
+		buffer.put(data)
+		stream.write(buffer.array())
 	}
 
 	fun asSpecialized(): BclPacket {

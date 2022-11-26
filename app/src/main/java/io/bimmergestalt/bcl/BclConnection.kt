@@ -13,19 +13,12 @@ import java.nio.channels.SocketChannel
 /**
  * Runs the BCL protocol over the given socket streams
  */
-class BclConnection(input: InputStream, output: OutputStream) {
+class BclConnection(input: InputStream, output: OutputStream, val connectionState: MutableConnectionState) {
 	companion object {
 		/**
 		 * The BCL states, which are announced out to other apps on the phone
 		 */
-		enum class STATE {
-			UNKNOWN,
-			SESSION_INIT_BYTES_SEND,
-			HANDSHAKE_FAILED,
-			GOT_HANDSHAKE,
-			SELECT_PROTOCOL,
-			WORKING,
-		}
+
 
 		private const val SESSION_INIT_WAIT = 1000L
 	}
@@ -41,8 +34,9 @@ class BclConnection(input: InputStream, output: OutputStream) {
 		get() = output.count
 
 	var running = true
-	var state: STATE = STATE.UNKNOWN
-		private set
+	var state: ConnectionState.BclState
+		private set(value) { connectionState.bclState = value }
+		get() = connectionState.bclState
 	val isConnected: Boolean
 		get() = connectionHandshake != null
 	private var connectionHandshake: BclPacket.Specialized.Handshake? = null
@@ -56,11 +50,11 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	@Throws(IOException::class)
 	fun connect() {
-		state = STATE.SESSION_INIT_BYTES_SEND
+		state = ConnectionState.BclState.OPENING
 		waitForHandshake()
 		selectProtocol()
 		openWatchdog()
-		state = STATE.WORKING
+		state = ConnectionState.BclState.ACTIVE
 	}
 
 	private fun waitForHandshake() {
@@ -83,16 +77,16 @@ class BclConnection(input: InputStream, output: OutputStream) {
 	private fun readHandshake() {
 		val packet = BclPacket.readFrom(input)
 		if (packet !is BclPacket.Specialized.Handshake) {
-			state = STATE.HANDSHAKE_FAILED
+			state = ConnectionState.BclState.FAILED
 			throw ConnectException("Did not receive BCL handshake")
 		}
 		connectionHandshake = packet
-		state = STATE.GOT_HANDSHAKE
+		state = ConnectionState.BclState.INITIALIZING
 	}
 
 	private fun selectProtocol() {
 		val connectionHandshake = connectionHandshake ?: throw AssertionError("No Handshake Receiver")
-		state = STATE.SELECT_PROTOCOL
+		state = ConnectionState.BclState.NEGOTIATING
 		val version = connectionHandshake.version.toByte()
 		if (version > 3) {
 			BclPacket.Specialized.SelectProto(version.toShort()).writeTo(output)
@@ -134,26 +128,37 @@ class BclConnection(input: InputStream, output: OutputStream) {
 
 	fun run() {
 		while (running) {
-			val packet = BclPacket.readFrom(input)
-			if (packet.command == BclPacket.COMMAND.DATA && packet.dest == 5001.toShort()) {
-				BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
-				doWatchdog()
-			}
-			else if (packet.command == BclPacket.COMMAND.DATA) {
-				BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
-				synchronized(clients) {
-					val channel = clients[packet.src]
-					if (channel == null) {
-						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
-					}
-					try {
-						channel?.write(ByteBuffer.wrap(packet.data))
-					} catch (e: IOException) {
-						clients.remove(packet.src)
-						BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
-					}
+			readPacket()
+		}
+	}
+
+	private fun readPacket() {
+		val packet = BclPacket.readFrom(input)
+		BclPacket.Specialized.DataAck(8 + packet.data.size).writeTo(output)
+
+		if (packet.command == BclPacket.COMMAND.DATA && packet.dest == 5001.toShort()) {
+			doWatchdog()
+		}
+		else if (packet.command == BclPacket.COMMAND.DATA) {
+			synchronized(clients) {
+				val channel = clients[packet.src]
+				if (channel == null) {
+					BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
+				}
+				try {
+					channel?.write(ByteBuffer.wrap(packet.data))
+				} catch (e: IOException) {
+					clients.remove(packet.src)
+					BclPacket.Specialized.Close(packet.src, packet.dest).writeTo(output)
 				}
 			}
+		}
+		else if (packet.command == BclPacket.COMMAND.CLOSE) {
+			val channel = clients[packet.src]
+			channel?.close()
+		}
+		else if (packet.command == BclPacket.COMMAND.HANGUP) {
+			shutdown()
 		}
 	}
 
@@ -165,20 +170,20 @@ class BclConnection(input: InputStream, output: OutputStream) {
 		0,
 		connectionHandshake?.bufferSize ?: -1,
 		0,
-		state.toString()
+		state.asBclReport()
 	)
 
-	fun tryShutdown() {
-		try {
-			shutdown()
-		} catch (_: IOException) {}
-	}
 	fun shutdown() {
 		running = false
-		BclPacket.Specialized.Close(5001, 5001).writeTo(output)
-		clients.keys.forEach {
-			BclPacket.Specialized.Close(it, 4004).writeTo(output)		// TODO track dest port to close correctly
+		try {
+			BclPacket.Specialized.Close(5001, 5001).writeTo(output)
+			clients.keys.forEach {
+				BclPacket.Specialized.Close(it, 4004)
+					.writeTo(output)        // TODO track dest port to close correctly
+			}
+			BclPacket(BclPacket.COMMAND.HANGUP, 0, 0, ByteArray(0)).writeTo(output)
+		} finally {
+			state = ConnectionState.BclState.SHUTDOWN
 		}
-		BclPacket(BclPacket.COMMAND.HANGUP, 0, 0, ByteArray(0)).writeTo(output)
 	}
 }

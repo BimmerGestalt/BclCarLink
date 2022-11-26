@@ -1,13 +1,31 @@
 <resources>
-    <string name="app_name">BclClient</string>
+    <string name="app_name">BMW Car Link</string>
     <string name="action_settings">Settings</string>
     <!-- Strings used for fragments for navigation -->
-    <string name="first_fragment_label">First Fragment</string>
-    <string name="second_fragment_label">Second Fragment</string>
+    <string name="connection_status_fragment_label">Connection Status</string>
+    <string name="settings_fragment_label">Settings</string>
     <string name="next">Next</string>
     <string name="previous">Previous</string>
 
-    <string name="hello_first_fragment">Hello first fragment</string>
     <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
     <string name="sw_automatic_bluetooth_connect">Connect to Bluetooth automatically</string>
+
+    <string name="status_transport_waiting">Waiting for car</string>
+    <string name="status_transport_searching">Searching for car</string>
+    <string name="status_transport_opening">Connecting to car</string>
+    <string name="status_transport_active">Connected to car</string>
+    <string name="status_transport_failed">Unable to connect to car, retrying</string>
+
+    <string name="status_bcl_waiting">Waiting to connect</string>
+    <string name="status_bcl_opening">Opening car protocol</string>
+    <string name="status_bcl_initializing">Beginning car protocol</string>
+    <string name="status_bcl_negotiating">Selecting car protocol</string>
+    <string name="status_bcl_active">Running car protocol</string>
+    <string name="status_bcl_failed">Unexpected initial communication, retrying</string>
+    <string name="status_bcl_shutdown">Cleanly disconnected car protocol</string>
+
+    <string name="status_proxy_waiting">Waiting to facilitate car apps</string>
+    <string name="status_proxy_active">Ready to facilitate car apps</string>
+    <string name="status_proxy_failed">Failed to prepare car app tunnel</string>
+
 </resources>

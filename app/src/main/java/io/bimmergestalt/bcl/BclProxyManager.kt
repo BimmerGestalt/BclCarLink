@@ -4,7 +4,7 @@ import org.tinylog.kotlin.Logger
 import java.io.IOException
 import kotlin.concurrent.thread
 
-class BclProxyManager(val port: Int, val destPort: Int) {
+class BclProxyManager(val port: Int, val destPort: Int, val state: MutableConnectionState) {
     var proxyThread: Thread? = null
         private set
     var proxyServer: BclProxyServer? = null
@@ -13,12 +13,18 @@ class BclProxyManager(val port: Int, val destPort: Int) {
     @Throws(IOException::class)
     fun startProxy(bclConnection: BclConnection) {
         shutdown()
-        val proxyServer = BclProxyServer(port, destPort, bclConnection)
-        this.proxyServer = proxyServer
-        proxyServer.listen()
+        try {
+            val proxyServer = BclProxyServer(port, destPort, bclConnection)
+            this.proxyServer = proxyServer
+            proxyServer.listen()
+        } catch (e: IOException) {
+            state.proxyState = ConnectionState.ProxyState.FAILED
+            throw e
+        }
+        state.proxyState = ConnectionState.ProxyState.ACTIVE
         proxyThread = thread(start = true, isDaemon = true) {
             try {
-                proxyServer.run()
+                this.proxyServer?.run()
             } catch (e: IOException) {
                 Logger.warn(e) { "IOException while running BclProxyServer" }
             }
@@ -30,5 +36,6 @@ class BclProxyManager(val port: Int, val destPort: Int) {
         proxyServer = null
         proxyThread?.interrupt()
         proxyThread = null
+        state.proxyState = ConnectionState.ProxyState.WAITING
     }
 }

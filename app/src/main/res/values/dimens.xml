@@ -1,3 +1,5 @@
 <resources>
     <dimen name="fab_margin">16dp</dimen>
+    <dimen name="list_margin">12dp</dimen>
+    <dimen name="icon_margin">6dp</dimen>
 </resources>

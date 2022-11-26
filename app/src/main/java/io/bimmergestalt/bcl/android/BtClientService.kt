@@ -17,6 +17,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.preference.PreferenceManager
 import io.bimmergestalt.bcl.BclConnection
 import io.bimmergestalt.bcl.BclProxyManager
+import io.bimmergestalt.bcl.ConnectionState
 import org.tinylog.kotlin.Logger
 import java.io.IOException
 import java.util.*
@@ -50,8 +51,8 @@ val BluetoothProfile.safeConnectedDevices: List<BluetoothDevice>
 class BtClientService: Service() {
 
 	companion object {
-		private val _statusText = MutableLiveData("")
-		val statusText: LiveData<String> = _statusText
+		private val _state = ConnectionStateLiveData()
+		val state: LiveData<ConnectionState> = _state
 		private const val ETCH_PROXY_PORT = 4007
 		private const val ETCH_DEST_PORT = 4004
 
@@ -91,7 +92,7 @@ class BtClientService: Service() {
 			tryConnections()
 		}
 	}
-	private var bclProxy = BclProxyManager(ETCH_PROXY_PORT, ETCH_DEST_PORT)
+	private var bclProxy = BclProxyManager(ETCH_PROXY_PORT, ETCH_DEST_PORT, _state)
 
 	override fun onBind(intent: Intent?): IBinder? {
 		return null
@@ -127,10 +128,14 @@ class BtClientService: Service() {
 
 	private fun scanBluetoothDevices() {
 		if (!subscribed) {
-			updateStatusText.run()
 			try {
+				if (_state.transportState == ConnectionState.TransportState.WAITING) {
+					_state.transportState = ConnectionState.TransportState.SEARCHING
+				}
 				this.getSystemService(BluetoothManager::class.java).adapter.getProfileProxy(this, a2dpListener, BluetoothProfile.A2DP)
-			} catch (_: SecurityException) { }
+			} catch (_: SecurityException) {
+				_state.transportState = ConnectionState.TransportState.FAILED
+			}
 
 			val filter = IntentFilter(BluetoothDevice.ACTION_UUID)
 			registerReceiver(uuidListener, filter)
@@ -148,7 +153,7 @@ class BtClientService: Service() {
 			connectedDevices.filter { it.hasBCL() }.forEach {
 				if (btThreads[it.address]?.isAlive != true) {
 					Logger.info { "Starting to connect to ${it.safeName}" }
-					val btConnection = BtConnection(it) {
+					val btConnection = BtConnection(it, _state) {
 						applyProxy()
 					}
 					btThreads[it.address] = btConnection.apply {
@@ -260,29 +265,6 @@ class BtClientService: Service() {
 				} catch (_: SecurityException) {}
 			}
 		}
-	}
-
-	private val updateStatusText: Runnable = Runnable {
-		if (btThreads.size == 0) {
-			_statusText.value = "No car found"
-		} else {
-			val connection = btThreads.values.firstOrNull { it.isAlive }
-			if (connection == null) {
-				_statusText.value = "Failed to connect to car"
-			} else {
-				val bclConnection = connection.bclConnection
-				if (bclConnection == null) {
-					_statusText.value = "Connecting to Bluetooth Socket"
-				} else {
-					_statusText.value = bclConnection.state.toString()
-				}
-			}
-		}
-		scheduleUpdateStatusText()
-	}
-	private fun scheduleUpdateStatusText() {
-		handler.removeCallbacks(updateStatusText)
-		handler.postDelayed(updateStatusText, 500)
 	}
 
 	private val updateDebugIntent = Runnable {

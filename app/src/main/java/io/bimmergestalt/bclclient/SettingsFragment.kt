@@ -7,7 +7,7 @@ import androidx.preference.PreferenceFragmentCompat
 /**
  * A simple [Fragment] subclass as the second destination in the navigation.
  */
-class PreferencesFragment : PreferenceFragmentCompat() {
+class SettingsFragment : PreferenceFragmentCompat() {
 	override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
 		setPreferencesFromResource(R.xml.preferences, rootKey)
 	}

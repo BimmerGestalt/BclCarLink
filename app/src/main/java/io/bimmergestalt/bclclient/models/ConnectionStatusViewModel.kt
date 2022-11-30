@@ -8,8 +8,8 @@ import androidx.lifecycle.ViewModel
 import io.bimmergestalt.bcl.ConnectionState
 import io.bimmergestalt.bcl.android.BtClientService
 import io.bimmergestalt.bclclient.R
+import io.bimmergestalt.bclclient.helpers.ConnectionStateStrings.toStringResource
 import io.bimmergestalt.bclclient.helpers.LiveDataHelpers.map
-import org.tinylog.kotlin.Logger
 
 class ConnectionStatusViewModel: ViewModel() {
     val btConnectionStatus = BtClientService.state
@@ -32,13 +32,7 @@ class ConnectionStatusViewModel: ViewModel() {
         }
     }
     val btTransportText: LiveData<Context.() -> String> = btConnectionStatus.map {
-        when (it.transportState) {
-            ConnectionState.TransportState.WAITING -> {{ getString(R.string.status_transport_waiting) }}
-            ConnectionState.TransportState.SEARCHING -> {{ getString(R.string.status_transport_searching) }}
-            ConnectionState.TransportState.OPENING -> {{ getString(R.string.status_transport_opening) }}
-            ConnectionState.TransportState.ACTIVE -> {{ getString(R.string.status_transport_active) }}
-            ConnectionState.TransportState.FAILED -> {{ getString(R.string.status_transport_failed) }}
-        }
+        { it.transportState.toStringResource(resources) }
     }
 
     val bclIsConnecting: LiveData<Boolean> = btConnectionStatus.map {
@@ -61,15 +55,7 @@ class ConnectionStatusViewModel: ViewModel() {
         }
     }
     val bclText: LiveData<Context.() -> String> = btConnectionStatus.map {
-        when (it.bclState) {
-            ConnectionState.BclState.WAITING -> {{ getString(R.string.status_bcl_waiting) }}
-            ConnectionState.BclState.OPENING -> {{ getString(R.string.status_bcl_opening) }}
-            ConnectionState.BclState.INITIALIZING -> {{ getString(R.string.status_bcl_initializing) }}
-            ConnectionState.BclState.NEGOTIATING -> {{ getString(R.string.status_bcl_negotiating) }}
-            ConnectionState.BclState.ACTIVE -> {{ getString(R.string.status_bcl_active) }}
-            ConnectionState.BclState.FAILED -> {{ getString(R.string.status_bcl_failed) }}
-            ConnectionState.BclState.SHUTDOWN -> {{ getString(R.string.status_bcl_shutdown) }}
-        }
+        { it.bclState.toStringResource(resources) }
     }
 
     val proxyIcon: Int = R.drawable.ic_baseline_widgets_24
@@ -82,10 +68,6 @@ class ConnectionStatusViewModel: ViewModel() {
         }
     }
     val proxyText: LiveData<Context.() -> String> = btConnectionStatus.map {
-        when (it.proxyState) {
-            ConnectionState.ProxyState.WAITING -> {{ getString(R.string.status_proxy_waiting) }}
-            ConnectionState.ProxyState.ACTIVE -> {{ getString(R.string.status_proxy_active) }}
-            ConnectionState.ProxyState.FAILED -> {{ getString(R.string.status_proxy_failed) }}
-        }
+        { it.proxyState.toStringResource(resources) }
     }
 }

@@ -55,23 +55,7 @@ class BtClientService: Service() {
 		val state: LiveData<ConnectionState> = _state
 		private const val ETCH_PROXY_PORT = 4007
 		private const val ETCH_DEST_PORT = 4004
-
-		fun shouldStartAutomatically(context: Context): Boolean {
-			val preferences = PreferenceManager.getDefaultSharedPreferences(context)
-			return preferences.getBoolean("automatic_bt_connection", true)
-		}
-		fun startService(context: Context) {
-			try {
-				context.startService(Intent(context, BtClientService::class.java))
-			} catch (e: IllegalStateException) {
-				Logger.warn { "Unable to start BtClientService: $e"}
-			}
-		}
-		fun stopService(context: Context) {
-			try {
-				context.startService(Intent(context, BtClientService::class.java).setAction("disconnect"))
-			} catch (_: IllegalStateException) {}
-		}
+		val ACTION_SHUTDOWN = "io.bimmergestalt.bcl.android.BcClientService.SHUTDOWN"
 	}
 
 	// on startup, check for Bluetooth Connect privilege, stop self if not
@@ -104,11 +88,10 @@ class BtClientService: Service() {
 			stopSelf(startId)
 			return START_NOT_STICKY
 		}
-		if (intent?.action != "disconnect") {
+		if (intent?.action != ACTION_SHUTDOWN) {
 			scanBluetoothDevices()
 		} else {
-			stopScan()
-			disconnect()
+			stopSelf()
 		}
 		return START_STICKY
 	}
@@ -129,6 +112,7 @@ class BtClientService: Service() {
 	private fun scanBluetoothDevices() {
 		if (!subscribed) {
 			try {
+				Logger.debug { "Checking Bluetooth State ${_state.transportState}" }
 				if (_state.transportState == ConnectionState.TransportState.WAITING) {
 					_state.transportState = ConnectionState.TransportState.SEARCHING
 				}
@@ -234,6 +218,7 @@ class BtClientService: Service() {
 	override fun onDestroy() {
 		super.onDestroy()
 		stopScan()
+		disconnect()
 	}
 
 	class ProfileListener(profileId: Int, var callback: () -> Unit): BluetoothProfile.ServiceListener {
@@ -247,12 +232,12 @@ class BtClientService: Service() {
 		override fun onServiceDisconnected(p0: Int)
 		{
 			profile = null
-			Logger.debug { "$profileName is unloaded" }
+			Logger.debug { "$profileName watcher is unloaded" }
 			callback()
 		}
 		override fun onServiceConnected(p0: Int, profile: BluetoothProfile?) {
 			this.profile = profile
-			Logger.debug { "$profileName is loaded" }
+			Logger.debug { "$profileName watcher is loaded" }
 			fetchUuidsWithSdp()
 			callback()
 		}

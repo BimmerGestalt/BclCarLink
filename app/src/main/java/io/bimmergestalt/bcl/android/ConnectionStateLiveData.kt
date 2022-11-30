@@ -20,4 +20,8 @@ class ConnectionStateLiveData: MutableConnectionState, LiveData<ConnectionState>
     init {
         postState()
     }
+
+    override fun toString(): String {
+        return "ConnectionStateLiveData(transportState=$transportState, bclState=$bclState, proxyState=$proxyState)"
+    }
 }

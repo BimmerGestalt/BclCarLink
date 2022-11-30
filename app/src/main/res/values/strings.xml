@@ -7,8 +7,10 @@
     <string name="next">Next</string>
     <string name="previous">Previous</string>
 
+    <string name="notification_channel_connection">Car Connection Status</string>
     <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
     <string name="sw_automatic_bluetooth_connect">Connect to Bluetooth automatically</string>
+    <string name="service_shutdown">Shutdown</string>
 
     <string name="status_transport_waiting">Waiting for car</string>
     <string name="status_transport_searching">Searching for car</string>

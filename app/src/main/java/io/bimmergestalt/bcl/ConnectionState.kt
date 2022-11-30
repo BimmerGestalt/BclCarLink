@@ -50,4 +50,12 @@ data class ConnectionStateConcrete(
     override var transportState: ConnectionState.TransportState,
     override var bclState: ConnectionState.BclState,
     override var proxyState: ConnectionState.ProxyState
-): ConnectionState
+): ConnectionState {
+    companion object {
+        val WAITING = ConnectionStateConcrete(
+            ConnectionState.TransportState.WAITING,
+            ConnectionState.BclState.WAITING,
+            ConnectionState.ProxyState.WAITING
+        )
+    }
+}

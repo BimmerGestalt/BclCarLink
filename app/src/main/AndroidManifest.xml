@@ -4,6 +4,8 @@
 
     <!-- BclProxy over localhost -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Run the Foreground Notification to stay in memory -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- View Bluetooth status -->
     <uses-permission android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30"/>
@@ -12,7 +14,6 @@
     <!-- But don't require Bluetooth support -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
-    <uses-permission android:name="android.permission.LOCAL_MAC_ADDRESS" />
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -38,6 +39,10 @@
                 android:name="android.app.lib_name"
                 android:value="" />
         </activity>
+
+        <service android:name="io.bimmergestalt.bclclient.MainService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
         <service android:name="io.bimmergestalt.bcl.android.BtClientService"
             android:exported="false" />
 

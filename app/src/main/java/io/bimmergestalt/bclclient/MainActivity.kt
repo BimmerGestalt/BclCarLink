@@ -31,10 +31,10 @@ class MainActivity : AppCompatActivity() {
 		setupActionBarWithNavController(navController, appBarConfiguration)
 
 		binding.fabConnect.setOnClickListener { view ->
-			BtClientService.startService(this)
+			MainService.startService(this)
 		}
 		binding.fabDisconnect.setOnClickListener { view ->
-			BtClientService.stopService(this)
+			MainService.stopService(this)
 		}
 
 	}
@@ -63,8 +63,8 @@ class MainActivity : AppCompatActivity() {
 
 	override fun onResume() {
 		super.onResume()
-		if (BtClientService.shouldStartAutomatically(applicationContext)) {
-			BtClientService.startService(this)
+		if (MainService.shouldStartAutomatically(applicationContext)) {
+			MainService.startService(this)
 		}
 	}
 }

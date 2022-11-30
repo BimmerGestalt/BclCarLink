@@ -24,7 +24,7 @@ class BtBroadcastReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         context ?: return
         intent ?: return
-        if (!BtClientService.shouldStartAutomatically(context)) {
+        if (!MainService.shouldStartAutomatically(context)) {
             return
         }
         if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) {
@@ -34,14 +34,14 @@ class BtBroadcastReceiver: BroadcastReceiver() {
             val newState = states[intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)] ?: "unknown"
             Logger.info { "Notified of A2DP status: ${device?.safeName} $oldState -> $newState" }
             if (newStateCode == BluetoothProfile.STATE_CONNECTED && device?.isCar() == true) {
-                BtClientService.startService(context)
+                MainService.startService(context)
             }
         }
         if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
             val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
             Logger.info {"Notified of ACL connection: ${device?.safeName}" }
             if (device?.isCar() == true) {
-                BtClientService.startService(context)
+                MainService.startService(context)
             }
         }
     }

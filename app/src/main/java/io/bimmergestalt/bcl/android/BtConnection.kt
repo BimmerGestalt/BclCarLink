@@ -2,9 +2,10 @@ package io.bimmergestalt.bcl.android
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
-import io.bimmergestalt.bcl.BclConnection
+import io.bimmergestalt.bcl.client.BclClientTransport
 import io.bimmergestalt.bcl.ConnectionState
 import io.bimmergestalt.bcl.MutableConnectionState
+import io.bimmergestalt.bcl.protocols.DestProtocolFactory
 import org.tinylog.kotlin.Logger
 import java.io.IOException
 import java.util.*
@@ -14,7 +15,8 @@ import java.util.*
  *
  * Will shut down upon failure
  */
-class BtConnection(val device: BluetoothDevice, val connectionState: MutableConnectionState, val onConnect: (BclConnection) -> Unit): Thread() {
+class BtConnection(val device: BluetoothDevice, val connectionState: MutableConnectionState,
+				   val destProtocolFactories: Iterable<DestProtocolFactory>): Thread() {
 
 	companion object {
 		val SDP_BCL: UUID =
@@ -22,7 +24,7 @@ class BtConnection(val device: BluetoothDevice, val connectionState: MutableConn
 	}
 
 	private var socket: BluetoothSocket? = null
-	var bclConnection: BclConnection? = null
+	var bclConnection: BclClientTransport? = null
 		private set
 	val isConnected: Boolean
 		get() = bclConnection?.isConnected == true
@@ -37,37 +39,22 @@ class BtConnection(val device: BluetoothDevice, val connectionState: MutableConn
 		this.socket = socket
 
 		try {
-			connectSocket()
+			connectSocket(socket)
+			connectBcl(socket)
 		} catch (_: SecurityException) {
 			return
 		} catch (_: InterruptedException) {
 			return
 		}
-
-		try {
-			if (socket.isConnected) {
-				connectionState.transportState = ConnectionState.TransportState.ACTIVE
-				val bclConnection = BclConnection(socket.inputStream, socket.outputStream, connectionState)
-				this.bclConnection = bclConnection
-				bclConnection.connect()
-				bclConnection.doWatchdog()
-				onConnect(bclConnection)
-				bclConnection.run()
-			}
-		} catch (_: SecurityException) {
-		} catch (e: IOException) {
-			Logger.warn(e) { "IOException communicating BCL" }
-		} catch (_: InterruptedException) {}
-		connectionState.transportState = ConnectionState.TransportState.WAITING
 	}
 
-	fun connectSocket() {
+	private fun connectSocket(socket: BluetoothSocket) {
 		var count = 0
 		val maxTries = 10
-		while (socket?.isConnected == false && count < maxTries) {
+		while (!socket.isConnected && count < maxTries) {
 			connectionState.transportState = ConnectionState.TransportState.OPENING
 			try {
-				socket?.connect()
+				socket.connect()
 			} catch (e: SecurityException) {
 				throw e
 			} catch (e: IOException) {
@@ -76,6 +63,27 @@ class BtConnection(val device: BluetoothDevice, val connectionState: MutableConn
 				sleep(2000)
 				count += 1
 			}
+		}
+	}
+
+	private fun connectBcl(socket: BluetoothSocket) {
+		while (socket.isConnected) {
+			try {
+					connectionState.transportState = ConnectionState.TransportState.ACTIVE
+					val bclConnection = BclClientTransport(socket.inputStream, socket.outputStream, connectionState, destProtocolFactories)
+					this.bclConnection = bclConnection
+					bclConnection.connect()
+					bclConnection.run()
+			} catch (_: SecurityException) {
+			} catch (e: IOException) {
+				Logger.warn(e) { "IOException communicating BCL" }
+			} catch (_: InterruptedException) {
+			} finally {
+				bclConnection?.shutdown()
+				bclConnection = null
+			}
+			connectionState.transportState = ConnectionState.TransportState.WAITING
+			sleep(1000)
 		}
 	}
 

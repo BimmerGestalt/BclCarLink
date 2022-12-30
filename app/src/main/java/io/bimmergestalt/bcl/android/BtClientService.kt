@@ -13,13 +13,8 @@ import android.os.*
 import android.util.ArrayMap
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.preference.PreferenceManager
-import io.bimmergestalt.bcl.BclConnection
-import io.bimmergestalt.bcl.BclProxyManager
 import io.bimmergestalt.bcl.ConnectionState
 import org.tinylog.kotlin.Logger
-import java.io.IOException
 import java.util.*
 
 fun BluetoothDevice?.isCar(): Boolean {
@@ -53,8 +48,10 @@ class BtClientService: Service() {
 	companion object {
 		private val _state = ConnectionStateLiveData()
 		val state: LiveData<ConnectionState> = _state
-		private const val ETCH_PROXY_PORT = 4007
-		private const val ETCH_DEST_PORT = 4004
+		private const val INTERVAL_SCAN: Int = 2000
+		private const val INTERVAL_KEEPALIVE: Int = 10000
+		private const val ETCH_PROXY_PORT: Short = 4007
+		private const val ETCH_DEST_PORT: Short = 4004
 		val ACTION_SHUTDOWN = "io.bimmergestalt.bcl.android.BcClientService.SHUTDOWN"
 	}
 
@@ -66,6 +63,10 @@ class BtClientService: Service() {
 	// each socket needs its own Thread
 
 	private val handler = Handler(Looper.getMainLooper())
+	private val intervalConnector = Runnable {
+		tryConnections()
+		scheduleScan()
+	}
 	private var subscribed = false
 	private val a2dpListener = ProfileListener(BluetoothProfile.A2DP) { tryConnections() }
 	private val btThreads = ArrayMap<String, BtConnection>()      // bt address to thread
@@ -76,7 +77,6 @@ class BtClientService: Service() {
 			tryConnections()
 		}
 	}
-	private var bclProxy = BclProxyManager(ETCH_PROXY_PORT, ETCH_DEST_PORT, _state)
 
 	override fun onBind(intent: Intent?): IBinder? {
 		return null
@@ -109,6 +109,15 @@ class BtClientService: Service() {
 		return false
 	}
 
+	private fun scheduleScan() {
+		handler.removeCallbacks(intervalConnector)
+		if (_state.transportState == ConnectionState.TransportState.ACTIVE) {
+			handler.postDelayed(intervalConnector, INTERVAL_KEEPALIVE.toLong())
+		} else {
+			handler.postDelayed(intervalConnector, INTERVAL_SCAN.toLong())
+		}
+	}
+
 	private fun scanBluetoothDevices() {
 		if (!subscribed) {
 			try {
@@ -124,6 +133,7 @@ class BtClientService: Service() {
 			val filter = IntentFilter(BluetoothDevice.ACTION_UUID)
 			registerReceiver(uuidListener, filter)
 
+			scheduleScan()
 			subscribed = true
 		} else {
 			tryConnections()
@@ -137,10 +147,7 @@ class BtClientService: Service() {
 			connectedDevices.filter { it.hasBCL() }.forEach {
 				if (btThreads[it.address]?.isAlive != true) {
 					Logger.info { "Starting to connect to ${it.safeName}" }
-					val btConnection = BtConnection(it, _state) {
-						applyProxy()
-					}
-					btThreads[it.address] = btConnection.apply {
+					btThreads[it.address] = tryConnection(it).apply {
 						start()
 					}
 				} else {
@@ -149,51 +156,17 @@ class BtClientService: Service() {
 			}
 			(btThreads.keys - connectedDevices.map { it.address }.toSet()).forEach { address ->
 				Logger.info { "Shutting down thread from disconnected $address" }
-				btThreads[address]?.shutdown()
-				btThreads.remove(address)
+				btThreads.remove(address)?.shutdown()
 			}
-			applyProxy()
 		}
 	}
 
-	private fun applyProxy() {
-		val btConnection = synchronized(btThreads) {
-			btThreads.values.firstOrNull { it.isAlive && it.isConnected }
-		}
-		val bclConnection = btConnection?.bclConnection
-		if (bclConnection != null) {
-			Logger.info { "Starting BCL Proxy"}
-			try {
-				bclProxy.startProxy(bclConnection)
-
-				announceProxy(btConnection.device.brand ?: "bmw", bclConnection.instanceId)
-				scheduleUpdateDebugIntent()
-			} catch (e: IOException) {
-				Logger.warn(e) { "Failure while starting BCL Proxy" }
-			}
-		} else if (bclProxy.proxyServer != null) {
-			Logger.info { "Stopping BCL Proxy"}
-			bclProxy.shutdown()
-			unannounceProxy()
-		}
-	}
-
-	private fun announceProxy(brand: String, instanceId: Int) {
-		val intent = Intent("com.bmwgroup.connected.accessory.ACTION_CAR_ACCESSORY_ATTACHED")
-			.putExtra("EXTRA_BRAND", brand)
-			.putExtra("EXTRA_ACCESSORY_BRAND", brand)
-			.putExtra("EXTRA_HOST", "127.0.0.1")
-			.putExtra("EXTRA_PORT", ETCH_PROXY_PORT)
-			.putExtra("EXTRA_INSTANCE_ID", instanceId)
-		sendBroadcast(intent)
-		val transport = Intent("com.bmwgroup.connected.accessory.ACTION_CAR_ACCESSORY_TRANSPORT_SWITCH")
-			.putExtra("EXTRA_TRANSPORT", "BT")
-		sendBroadcast(transport)
-	}
-
-	private fun unannounceProxy() {
-		val intent = Intent("com.bmwgroup.connected.accessory.ACTION_CAR_ACCESSORY_DETACHED")
-		sendBroadcast(intent)
+	private fun tryConnection(device: BluetoothDevice): BtConnection {
+		return BtConnection(device, _state, listOf(
+			BclTunnelReport.Factory(this, device.brand ?: "bmw"),
+			EtchProxyService.Factory(this, ETCH_PROXY_PORT, ETCH_DEST_PORT,
+				device.brand ?: "bmw", _state)
+		))
 	}
 
 	private fun stopScan() {
@@ -204,15 +177,20 @@ class BtClientService: Service() {
 				adapter.cancelDiscovery()
 			} catch (_: SecurityException) { }
 			unregisterReceiver(uuidListener)
+			_state.transportState = ConnectionState.TransportState.WAITING
 		}
 		subscribed = false
+		handler.removeCallbacks(intervalConnector)
 	}
 
 	private fun disconnect() {
-		btThreads.values.forEach {
-			it?.shutdown()
+		Logger.info {"Shutting down BtClientService"}
+		synchronized(btThreads) {
+			btThreads.values.forEach {
+				it?.shutdown()
+			}
+			btThreads.clear()
 		}
-		bclProxy.shutdown()
 	}
 
 	override fun onDestroy() {
@@ -250,31 +228,5 @@ class BtClientService: Service() {
 				} catch (_: SecurityException) {}
 			}
 		}
-	}
-
-	private val updateDebugIntent = Runnable {
-		val connection = btThreads.values.firstOrNull { it.isAlive && it.isConnected }
-		val bclConnection = connection?.bclConnection
-		if (bclConnection != null) {
-			val report = bclConnection.getReport()
-			val startTimestamp = SystemClock.uptimeMillis() - (System.currentTimeMillis() - report.startTimestamp)
-			val intent = Intent("com.bmwgroup.connected.accessory.ACTION_CAR_ACCESSORY_INFO")
-				.putExtra("EXTRA_START_TIMESTAMP", startTimestamp)
-				.putExtra("EXTRA_NUM_BYTES_READ", report.bytesRead)
-				.putExtra("EXTRA_NUM_BYTES_WRITTEN", report.bytesWritten)
-				.putExtra("EXTRA_NUM_CONNECTIONS", report.numConnections)
-				.putExtra("EXTRA_INSTANCE_ID", report.instanceId)
-				.putExtra("EXTRA_WATCHDOG_RTT", report.watchdogRtt)
-				.putExtra("EXTRA_HU_BUFFER_SIZE", report.huBufSize)
-				.putExtra("EXTRA_REMAINING_ACK_BYTES", report.remainingAckBytes)
-				.putExtra("EXTRA_STATE", report.state)
-				.putExtra("EXTRA_BRAND", connection.device.brand ?: "bmw")
-			sendBroadcast(intent)
-			scheduleUpdateDebugIntent()
-		}
-	}
-	private fun scheduleUpdateDebugIntent() {
-		handler.removeCallbacks(updateDebugIntent)
-		handler.postDelayed(updateDebugIntent, 500)
 	}
 }

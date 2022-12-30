@@ -47,7 +47,7 @@ class MainService: LifecycleService() {
         }
         fun stopService(context: Context) {
             try {
-                context.startService(Intent(context, BtClientService::class.java).setAction(ACTION_SHUTDOWN))
+                context.startService(Intent(context, MainService::class.java).setAction(ACTION_SHUTDOWN))
             } catch (_: IllegalStateException) {}
         }
     }
@@ -67,6 +67,7 @@ class MainService: LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_SHUTDOWN) {
+            Logger.info { "Shutting down MainService" }
             stopSelf()
         } else {
             Logger.info { "Starting MainService" }

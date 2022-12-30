@@ -1,5 +1,7 @@
 package io.bimmergestalt.bcl
 
+import io.bimmergestalt.bcl.client.ProxyConnectionGrantor
+import io.bimmergestalt.bcl.protocols.ProxyClientConnection
 import org.tinylog.kotlin.Logger
 import java.io.IOException
 import java.io.OutputStream
@@ -11,21 +13,21 @@ import java.nio.channels.Selector
 import java.nio.channels.ServerSocketChannel
 import java.nio.channels.SocketChannel
 
-class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: BclConnection) {
+class BclProxyServer(val listenPort: Short, val connection: ProxyConnectionGrantor) {
     val selector = Selector.open()
     val serverSocket = ServerSocketChannel.open()
-    val sockets = HashMap<SocketChannel, OutputStream>()
+    val connections = HashMap<SocketChannel, ProxyClientConnection>()
 
     fun listen() {
         serverSocket.configureBlocking(false)
         serverSocket.register(selector, SelectionKey.OP_ACCEPT)
-        serverSocket.bind(InetSocketAddress(listenPort))
+        serverSocket.bind(InetSocketAddress(listenPort.toInt()))
     }
 
     fun run() {
         val inputBuffer = ByteBuffer.allocate(4000)
         while (serverSocket.isOpen) {
-            selector.select(2500)
+            selector.select(10000)
             val readyKeys = selector.selectedKeys()
             readyKeys.forEach { key ->
                 try {
@@ -33,32 +35,28 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
                         // new client connection
                         val socket = serverSocket.accept()
                         socket.configureBlocking(false)
-                        socket.socket().tcpNoDelay = false
+                        socket.socket().tcpNoDelay = true
                         socket.register(selector, SelectionKey.OP_READ)
-                        val bclOutput = connection.openSocket(
-                            destPort.toShort(),
-                            socket
-                        )
-                        sockets[socket] = bclOutput
+                        val bclProxyConnection = connection.openConnection(SocketChannelOutputStream(socket))
+                        connections[socket] = bclProxyConnection
                     }
                     if (key.isReadable) {
                         // new data from the client
                         val channel = key.channel()
                         if (channel is SocketChannel) {
                             val len = channel.read(inputBuffer)
-                            Logger.debug { "Read $len bytes from client socket" }
+//                            Logger.debug { "Read $len bytes from client socket" }
                             if (len > 0) {
                                 try {
-                                    sockets[channel]?.write(inputBuffer.array(), 0, len)
+                                    connections[channel]?.toTunnel?.write(inputBuffer.array(), 0, len)
                                 } catch (e: IOException) {
                                     Logger.warn(e) { "IOException while writing to BclConnection from client" }
                                     channel.close()
-                                    sockets.remove(channel)
+                                    connections.remove(channel)?.close()
                                 }
                             } else if (len == -1) {
                                 key.cancel()
-                                sockets[channel]?.close()
-                                sockets.remove(channel)
+                                connections.remove(channel)?.close()
                             }
                             inputBuffer.clear()
                         }
@@ -66,26 +64,48 @@ class BclProxyServer(val listenPort: Int, val destPort: Int, val connection: Bcl
                 } catch (_: CancelledKeyException) {}
             }
             readyKeys.clear()
-            connection.doWatchdog() // TODO move watchdog to a better place
         }
         shutdown()
     }
 
     fun shutdown() {
-        synchronized(sockets) {
-            sockets.keys.forEach {
+        synchronized(connections) {
+            connections.keys.forEach {
                 try {
                     it.close()
                 } catch (e: IOException) {
                     Logger.warn(e) { "IOException while shutting down BclProxy client" }
                 }
             }
-            sockets.clear()
+            connections.clear()
             try {
                 serverSocket.close()
             } catch (e: IOException) {
                 Logger.warn(e) { "IOException while shutting down BclProxy ServerSocket" }
             }
         }
+    }
+}
+
+/**
+ * Masquerades a SocketChannel as an OutputStream
+ */
+class SocketChannelOutputStream(private val channel: SocketChannel): OutputStream() {
+    override fun write(b: Int) {
+        channel.write(ByteBuffer.wrap(byteArrayOf(b.toByte())))
+    }
+
+    override fun write(b: ByteArray?) {
+        b ?: return
+        channel.write(ByteBuffer.wrap(b))
+    }
+
+    override fun write(b: ByteArray?, off: Int, len: Int) {
+        b ?: return
+        channel.write(ByteBuffer.wrap(b, off, len))
+    }
+
+    override fun close() {
+        channel.close()
     }
 }

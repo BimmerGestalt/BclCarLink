@@ -34,7 +34,7 @@ open class BclPacket(
 			val data = ByteArray(dataSize)
 			reader.readFully(data)
 			val packet = BclPacket(command, src, dest, data).asSpecialized()
-			Logger.debug { "Read $packet"}
+//			Logger.debug { "Read $packet"}
 			return packet
 		}
 	}
@@ -160,8 +160,6 @@ open class BclPacket(
 		if (this === other) return true
 		if (other !is BclPacket) return false
 
-		other
-
 		if (command != other.command) return false
 		if (src != other.src) return false
 		if (dest != other.dest) return false
@@ -178,16 +176,19 @@ open class BclPacket(
 		return result
 	}
 
-
-
 	fun serialize(): ByteArray {
-		val output = ByteArrayOutputStream(8 + data.size)
-		writeTo(output)
-		return output.toByteArray()
+//		Logger.debug { "Serializing $this"}
+		val buffer = ByteBuffer.allocate(8 + data.size)
+		buffer.putShort(command.value)
+		buffer.putShort(src)
+		buffer.putShort(dest)
+		buffer.putShort(data.size.toShort())
+		buffer.put(data)
+		return buffer.array()
 	}
 
 	fun writeTo(stream: OutputStream) {
-		Logger.debug { "Writing $this"}
+//		Logger.debug { "Writing $this"}
 		// write to the stream, needs to be big endian
 		val buffer = ByteBuffer.allocate(8 + data.size)
 		buffer.putShort(command.value)

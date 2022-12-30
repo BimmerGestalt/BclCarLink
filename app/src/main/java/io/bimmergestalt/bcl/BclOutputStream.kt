@@ -2,15 +2,14 @@ package io.bimmergestalt.bcl
 
 import java.io.OutputStream
 
-class BclOutputStream(private val src: Short, private val dest: Short, private val outputStream: OutputStream):
-    OutputStream() {
+class BclOutputStream(private val src: Short, private val dest: Short, private val output: BclPacketSender): OutputStream() {
     override fun write(b: Int) {
-        BclPacket.Specialized.Data(src, dest, ByteArray(b)).writeTo(outputStream)
+        output.write(BclPacket.Specialized.Data(src, dest, ByteArray(b)))
     }
 
     override fun write(b: ByteArray?) {
         b ?: return
-        BclPacket.Specialized.Data(src, dest, b).writeTo(outputStream)
+        output.write(BclPacket.Specialized.Data(src, dest, b))
     }
 
     override fun write(b: ByteArray?, off: Int, len: Int) {
@@ -20,5 +19,9 @@ class BclOutputStream(private val src: Short, private val dest: Short, private v
         } else {
             write(b.sliceArray(off until len))
         }
+    }
+
+    override fun close() {
+        output.write(BclPacket.Specialized.Close(src, dest))
     }
 }

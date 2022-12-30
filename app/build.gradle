@@ -15,6 +15,7 @@ android {
         targetSdk 32
         versionCode 1
         versionName "1.0"
+        archivesBaseName = "bclcarlink"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

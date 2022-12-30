@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">BMW Car Link</string>
+    <string name="app_name">BCL Car Link</string>
     <string name="action_settings">Settings</string>
     <!-- Strings used for fragments for navigation -->
     <string name="connection_status_fragment_label">Connection Status</string>

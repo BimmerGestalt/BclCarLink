@@ -1,0 +1,2 @@
+# list any custom writers here
+io.bimmergestalt.bclclient.helpers.LogBufferWriter

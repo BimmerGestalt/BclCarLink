@@ -7,17 +7,17 @@
 
     <fragment
         android:id="@+id/ConnectionStatusFragment"
-        android:name="io.bimmergestalt.bclclient.ConnectionStatusFragment"
+        android:name="io.bimmergestalt.bclclient.fragments.ConnectionStatusFragment"
         android:label="@string/connection_status_fragment_label"
         tools:layout="@layout/fragment_connection_status">
 
         <action
             android:id="@+id/action_ConnectionStatusFragment_to_SettingsFragment"
-            app:destination="@id/SettingsFragment" />
+            app:destination="@id/DetailsFragment" />
     </fragment>
     <fragment
-        android:id="@+id/SettingsFragment"
-        android:name="io.bimmergestalt.bclclient.SettingsFragment"
+        android:id="@+id/DetailsFragment"
+        android:name="io.bimmergestalt.bclclient.fragments.DetailsFragment"
         android:label="@string/settings_fragment_label"
         tools:layout="@layout/fragment_settings">
     </fragment>

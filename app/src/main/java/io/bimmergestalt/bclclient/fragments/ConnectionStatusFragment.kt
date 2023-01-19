@@ -1,4 +1,4 @@
-package io.bimmergestalt.bclclient
+package io.bimmergestalt.bclclient.fragments
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -7,7 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
-import io.bimmergestalt.bcl.android.ConnectionStateLiveData
+import io.bimmergestalt.bclclient.R
 import io.bimmergestalt.bclclient.databinding.FragmentConnectionStatusBinding
 import io.bimmergestalt.bclclient.models.ConnectionStatusViewModel
 

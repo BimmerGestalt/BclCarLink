@@ -30,13 +30,14 @@ class MainActivity : AppCompatActivity() {
 		appBarConfiguration = AppBarConfiguration(navController.graph)
 		setupActionBarWithNavController(navController, appBarConfiguration)
 
+		/*
 		binding.fabConnect.setOnClickListener { view ->
 			MainService.startService(this)
 		}
 		binding.fabDisconnect.setOnClickListener { view ->
 			MainService.stopService(this)
 		}
-
+		*/
 	}
 
 	override fun onCreateOptionsMenu(menu: Menu): Boolean {

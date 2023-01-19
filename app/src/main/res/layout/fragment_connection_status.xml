@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_margin="5dp"
-        tools:context=".ConnectionStatusFragment"
+        tools:context=".fragments.ConnectionStatusFragment"
         android:orientation="vertical">
 
         <androidx.appcompat.widget.LinearLayoutCompat

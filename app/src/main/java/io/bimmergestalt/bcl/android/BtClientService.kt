@@ -125,7 +125,7 @@ class BtClientService: Service() {
 				if (_state.transportState == ConnectionState.TransportState.WAITING) {
 					_state.transportState = ConnectionState.TransportState.SEARCHING
 				}
-				this.getSystemService(BluetoothManager::class.java).adapter.getProfileProxy(this, a2dpListener, BluetoothProfile.A2DP)
+				this.getSystemService(BluetoothManager::class.java).adapter?.getProfileProxy(this, a2dpListener, BluetoothProfile.A2DP)
 			} catch (_: SecurityException) {
 				_state.transportState = ConnectionState.TransportState.FAILED
 			}
@@ -173,8 +173,10 @@ class BtClientService: Service() {
 		if (subscribed) {
 			try {
 				val adapter = this.getSystemService(BluetoothManager::class.java).adapter
-				adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpListener.profile)
-				adapter.cancelDiscovery()
+				if (adapter != null) {
+					adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dpListener.profile)
+					adapter.cancelDiscovery()
+				}
 			} catch (_: SecurityException) { }
 			unregisterReceiver(uuidListener)
 			_state.transportState = ConnectionState.TransportState.WAITING

@@ -71,6 +71,12 @@
                 android:text="@{viewModel.proxyText}" />
         </androidx.appcompat.widget.LinearLayoutCompat>
 
+        <androidx.fragment.app.FragmentContainerView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:id="@+id/fragment_settings"
+            android:name="io.bimmergestalt.bclclient.fragments.PermissionsFragment"/>
+
         <Button
             android:id="@+id/button_first"
             android:layout_width="wrap_content"

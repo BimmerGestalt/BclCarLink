@@ -12,6 +12,9 @@
     <string name="sw_automatic_bluetooth_connect">Connect to Bluetooth automatically</string>
     <string name="service_shutdown">Shutdown</string>
 
+    <string name="lbl_grant_permission_bluetooth_connect">Grant Bluetooth connectivity access</string>
+    <string name="lbl_grant">Grant</string>
+
     <string name="status_transport_waiting">Waiting for car</string>
     <string name="status_transport_searching">Searching for car</string>
     <string name="status_transport_opening">Connecting to car</string>

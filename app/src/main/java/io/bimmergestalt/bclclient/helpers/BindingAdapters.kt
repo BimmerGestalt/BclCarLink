@@ -23,6 +23,10 @@ fun setImageViewResource(view: ImageView, resource: Int) {
     view.setImageResource(resource)
 }
 
+@BindingAdapter("android:visibility")
+fun setViewVisibility(view: View, visible: Boolean) {
+    view.visibility = if (visible) View.VISIBLE else View.GONE
+}
 @BindingAdapter("android:foregroundTint")
 fun setForegroundTint(view: View, value: (Context.() -> Int)?) {
     value ?: return

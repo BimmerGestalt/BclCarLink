@@ -25,6 +25,7 @@
                 android:src="@{viewModel.btTransportIcon}"
                 app:tint="@{viewModel.btTransportColor}"
                 app:animator="@{viewModel.btTransportIsConnecting ? @animator/pulse_in : null}"
+                android:alpha="@{viewModel.btTransportIsConnecting ? 1.0f : 0.2f}"
                 />
             <TextView
                 android:layout_width="wrap_content"
@@ -45,6 +46,7 @@
                 android:src="@{viewModel.bclIcon}"
                 app:tint="@{viewModel.bclColor}"
                 app:animator="@{viewModel.bclIsConnecting ? @animator/pulse_in : null}"
+                android:alpha="@{viewModel.bclIsConnecting ? 1.0f : 0.2f}"
                 />
             <TextView
                 android:layout_width="wrap_content"

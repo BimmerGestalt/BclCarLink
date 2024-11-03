@@ -4,12 +4,12 @@ import java.io.OutputStream
 
 class BclOutputStream(private val src: Short, private val dest: Short, private val output: BclPacketSender): OutputStream() {
     override fun write(b: Int) {
-        output.write(BclPacket.Specialized.Data(src, dest, ByteArray(b)))
+        output.writePacket(BclPacket.Specialized.Data(src, dest, ByteArray(b)))
     }
 
     override fun write(b: ByteArray?) {
         b ?: return
-        output.write(BclPacket.Specialized.Data(src, dest, b))
+        output.writePacket(BclPacket.Specialized.Data(src, dest, b))
     }
 
     override fun write(b: ByteArray?, off: Int, len: Int) {
@@ -22,6 +22,6 @@ class BclOutputStream(private val src: Short, private val dest: Short, private v
     }
 
     override fun close() {
-        output.write(BclPacket.Specialized.Close(src, dest))
+        output.writePacket(BclPacket.Specialized.Close(src, dest))
     }
 }

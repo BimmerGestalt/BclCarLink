@@ -3,9 +3,11 @@ package io.bimmergestalt.bcl
 import org.tinylog.Logger
 import java.io.OutputStream
 
-class BclPacketSender(private val output: OutputStream) {
-    @Suppress("BlockingMethodInNonBlockingContext") // Why does linter think this context is nonblocking
-    fun write(packet: BclPacket) {
+interface BclPacketSender {
+    fun writePacket(packet: BclPacket)
+}
+class BclPacketSenderConcrete(private val output: OutputStream): BclPacketSender {
+    override fun writePacket(packet: BclPacket) {
         if (packet.dest == 5001.toShort()) {
             Logger.debug {"Sending $packet"}
         }

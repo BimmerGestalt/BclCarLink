@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothSocket
 import io.bimmergestalt.bcl.client.BclClientTransport
 import io.bimmergestalt.bcl.ConnectionState
 import io.bimmergestalt.bcl.MutableConnectionState
+import io.bimmergestalt.bcl.multiplex.BclMultiplexer
 import io.bimmergestalt.bcl.protocols.DestProtocolFactory
 import org.tinylog.kotlin.Logger
 import java.io.IOException
@@ -25,6 +26,8 @@ class BtConnection(val device: BluetoothDevice, val connectionState: MutableConn
 
 	private var socket: BluetoothSocket? = null
 	var bclConnection: BclClientTransport? = null
+		private set
+	var bclMultiplexer: BclMultiplexer? = null
 		private set
 	val isConnected: Boolean
 		get() = bclConnection?.isConnected == true
@@ -69,16 +72,21 @@ class BtConnection(val device: BluetoothDevice, val connectionState: MutableConn
 	private fun connectBcl(socket: BluetoothSocket) {
 		while (socket.isConnected) {
 			try {
-					connectionState.transportState = ConnectionState.TransportState.ACTIVE
-					val bclConnection = BclClientTransport(socket.inputStream, socket.outputStream, connectionState, destProtocolFactories)
-					this.bclConnection = bclConnection
-					bclConnection.connect()
-					bclConnection.run()
+				connectionState.transportState = ConnectionState.TransportState.ACTIVE
+				val bclConnection = BclClientTransport(socket.inputStream, socket.outputStream, connectionState)
+				this.bclConnection = bclConnection
+				bclConnection.connect()
+				val bclMultiplexer = BclMultiplexer(bclConnection, destProtocolFactories)
+				this.bclMultiplexer = bclMultiplexer
+				bclMultiplexer.openProtocols()
+				bclMultiplexer.run()
 			} catch (_: SecurityException) {
 			} catch (e: IOException) {
 				Logger.warn(e) { "IOException communicating BCL" }
 			} catch (_: InterruptedException) {
 			} finally {
+				bclMultiplexer?.shutdown()
+				bclMultiplexer = null
 				bclConnection?.shutdown()
 				bclConnection = null
 			}

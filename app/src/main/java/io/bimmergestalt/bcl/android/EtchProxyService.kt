@@ -2,21 +2,17 @@ package io.bimmergestalt.bcl.android
 
 import android.content.Context
 import android.content.Intent
-import io.bimmergestalt.bcl.BclProxyServer
 import io.bimmergestalt.bcl.ConnectionState
 import io.bimmergestalt.bcl.MutableConnectionState
 import io.bimmergestalt.bcl.client.BclClientTransport
 import io.bimmergestalt.bcl.client.ProxyConnectionOpener
-import io.bimmergestalt.bcl.client.ProxyConnectionGrantor
 import io.bimmergestalt.bcl.protocols.DestProtocolFactory
 import io.bimmergestalt.bcl.protocols.Protocol
-import org.tinylog.kotlin.Logger
-import java.io.IOException
-import kotlin.concurrent.thread
+import io.bimmergestalt.bcl.protocols.TcpProxyProtocol
 
 class EtchProxyService(val context: Context, val listenPort: Short, destPort: Short,
-                       brand: String, instanceId: Int, bclProxy: ProxyConnectionOpener,
-                       val state: MutableConnectionState): Protocol {
+                       val brand: String, val instanceId: Int, bclProxy: ProxyConnectionOpener,
+                       state: MutableConnectionState): Protocol {
     class Factory(val context: Context, val listenPort: Short, val destPort: Short, val brand: String, val state: MutableConnectionState): DestProtocolFactory {
         override fun onConnect(
             transport: BclClientTransport,
@@ -26,31 +22,12 @@ class EtchProxyService(val context: Context, val listenPort: Short, destPort: Sh
         }
     }
 
-    private val proxyConnectionGrantor = ProxyConnectionGrantor(destPort, bclProxy)
-    private val proxyServer = BclProxyServer(listenPort, proxyConnectionGrantor)
-    private val proxyThread = thread(start = false, isDaemon = true) {
-        try {
-            this.proxyServer.run()
-        } catch (e: IOException) {
-            Logger.warn(e) { "IOException while running EtchProxyService" }
+    private val tcpProxy = TcpProxyProtocol(listenPort, destPort, bclProxy, state) {
+        when (it) {
+            ConnectionState.ProxyState.WAITING -> unannounceProxy()
+            ConnectionState.ProxyState.FAILED -> unannounceProxy()
+            ConnectionState.ProxyState.ACTIVE -> announceProxy(brand, instanceId)
         }
-    }
-
-    init {
-        startProxy()
-        announceProxy(brand, instanceId)
-    }
-
-    @Throws(IOException::class)
-    private fun startProxy() {
-        try {
-            proxyServer.listen()
-        } catch (e: IOException) {
-            state.proxyState = ConnectionState.ProxyState.FAILED
-            throw e
-        }
-        state.proxyState = ConnectionState.ProxyState.ACTIVE
-        proxyThread.start()
     }
 
     private fun announceProxy(brand: String, instanceId: Int) {
@@ -72,9 +49,6 @@ class EtchProxyService(val context: Context, val listenPort: Short, destPort: Sh
     }
 
     override fun shutdown() {
-        unannounceProxy()
-        proxyServer.shutdown()
-        proxyThread.interrupt()
-        state.proxyState = ConnectionState.ProxyState.WAITING
+        tcpProxy.shutdown()
     }
 }

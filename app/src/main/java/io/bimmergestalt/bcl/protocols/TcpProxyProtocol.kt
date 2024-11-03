@@ -1,6 +1,6 @@
 package io.bimmergestalt.bcl.protocols
 
-import io.bimmergestalt.bcl.BclProxyServer
+import io.bimmergestalt.bcl.multiplex.BclProxyServer
 import io.bimmergestalt.bcl.ConnectionState
 import io.bimmergestalt.bcl.MutableConnectionState
 import io.bimmergestalt.bcl.client.ProxyConnectionGrantor

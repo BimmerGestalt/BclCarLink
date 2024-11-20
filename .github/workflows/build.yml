@@ -2,7 +2,8 @@ name: build
 
 on:
   push:
-    branches: '*'
+    branches:
+      - '*'
   pull_request:
     types: [opened, synchronize]
 
@@ -11,7 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout the project
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -21,7 +22,7 @@ jobs:
       - name: Build the project
         run: ./gradlew assembleDebug
       - name: Upload APKs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 60
           name: apk
@@ -51,7 +52,7 @@ jobs:
           git push -f origin latest_build
 
       - name: Download project artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: apk
       - name: Stage upload directory
